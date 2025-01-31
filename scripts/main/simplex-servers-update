@@ -5,7 +5,7 @@ set -eu
 PATH="/usr/local/bin:$PATH"
 
 # Links to scripts/configs
-scripts_url="https://raw.githubusercontent.com/simplex-chat/simplexmq/stable/scripts/main"
+scripts_url="https://raw.githubusercontent.com/shumvgolove/simplexmq/refs/heads/sh/scripts/scripts/main"
 scripts_url_systemd_smp="$scripts_url/smp-server.service"
 scripts_url_systemd_xftp="$scripts_url/xftp-server.service"
 scripts_url_update="$scripts_url/simplex-servers-update"
