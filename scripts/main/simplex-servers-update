@@ -131,7 +131,7 @@ check_versions() {
 
   case "$VER" in 
     latest)
-      remote_version="$(curl --proto '=https' --tlsv1.2 -sSf -L https://api.github.com/repos/simplex-chat/simplexmq/releases/latest 2>/dev/null | grep -i "tag_name" | awk -F \" '{print $4}')"
+      remote_version="$(curl --proto '=https' --tlsv1.2 -sSf -L https://api.github.com/repos/simplex-chat/shumvgolove/releases/latest 2>/dev/null | grep -i "tag_name" | awk -F \" '{print $4}')"
 
       if [ -z "$remote_version" ]; then
         printf "${RED}Something went wrong when ${YLW}resolving the lastest version${NC}: either you don't have connection to Github or you're rate-limited.\n"
@@ -140,7 +140,7 @@ check_versions() {
       ;;
     *)
       # Check if this version really exist
-      ver_check="https://github.com/simplex-chat/simplexmq/releases/tag/${VER}"
+      ver_check="https://github.com/shumvgolove/simplexmq/releases/tag/${VER}"
       
       if curl -o /dev/null --proto '=https' --tlsv1.2 -sf -L "${ver_check}"; then
         remote_version="${VER}"
@@ -158,8 +158,8 @@ check_versions() {
   esac
 
   # Links to scripts/configs
-  bin_url="https://github.com/simplex-chat/simplexmq/releases/download/${remote_version}"
-  scripts_url="https://raw.githubusercontent.com/simplex-chat/simplexmq/refs/tags/${remote_version}/scripts/main"
+  bin_url="https://github.com/shumvgolove/simplexmq/releases/download/${remote_version}"
+  scripts_url="https://raw.githubusercontent.com/shumvgolove/simplexmq/refs/tags/${remote_version}/scripts/main"
   scripts_url_systemd_smp="$scripts_url/smp-server.service"
   scripts_url_systemd_xftp="$scripts_url/xftp-server.service"
   scripts_url_update="$scripts_url/simplex-servers-update"
