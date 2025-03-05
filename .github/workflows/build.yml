@@ -1,71 +1,47 @@
 name: build
 
 on:
-  push:
-    branches:
-      - master
-      - stable
-    tags:
-      - "v*"
-  pull_request:
+  tags:
+    - "v*"
 
 jobs:
   build:
-    name: build-${{ matrix.os }}-${{ matrix.ghc }}
-    runs-on: ${{ matrix.os }}
+    name: "Ubuntu ${{ matrix.os }}: ${{ matrix.ghc }}"
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-20.04
-            platform_name: 20_04-x86-64
+          - os: 20.04
             ghc: "8.10.7"
-          - os: ubuntu-20.04
             platform_name: 20_04-x86-64
+          - os: 22.04
             ghc: "9.6.3"
-          - os: ubuntu-22.04
             platform_name: 22_04-x86-64
+          - os: 24.04
             ghc: "9.6.3"
+            platform_name: 24_04-x86-64
     steps:
       - name: Clone project
         uses: actions/checkout@v3
 
-      - name: Setup Haskell
-        uses: haskell-actions/setup@v2
-        with:
-          ghc-version: ${{ matrix.ghc }}
-          cabal-version: "3.10.1.0"
-
-      - name: Cache dependencies
-        uses: actions/cache@v2
-        with:
-          path: |
-            ~/.cabal/store
-            dist-newstyle
-          key: ${{ matrix.os }}-${{ hashFiles('cabal.project', 'simplexmq.cabal') }}
-
-      - name: Build
+      - name: Build and test
         shell: bash
-        run: cabal build --enable-tests
+        run: docker build --output . .
 
-      - name: Test
-        timeout-minutes: 40
-        shell: bash
-        run: cabal test --test-show-details=direct
-
-      - name: Prepare binaries
+      - name: Prepare binaries--output . .
         if: startsWith(github.ref, 'refs/tags/v')
         shell: bash
         run: |
-          mv $(cabal list-bin smp-server) smp-server-ubuntu-${{ matrix.platform_name}}
-          mv $(cabal list-bin ntf-server) ntf-server-ubuntu-${{ matrix.platform_name}}
-          mv $(cabal list-bin xftp-server) xftp-server-ubuntu-${{ matrix.platform_name}}
-          mv $(cabal list-bin xftp) xftp-ubuntu-${{ matrix.platform_name}}
+          mv smp-server smp-server-ubuntu-${{ matrix.platform_name}}
+          mv ntf-server ntf-server-ubuntu-${{ matrix.platform_name}}
+          mv xftp-server xftp-server-ubuntu-${{ matrix.platform_name}}
+          mv xftp xftp-ubuntu-${{ matrix.platform_name}}
 
       - name: Build changelog
         if: startsWith(github.ref, 'refs/tags/v')
         id: build_changelog
-        uses: mikepenz/release-changelog-builder-action@v1
+        uses: mikepenz/release-changelog-builder-action@v5
         with:
           configuration: .github/changelog_conf.json
           failOnError: true
@@ -76,7 +52,7 @@ jobs:
 
       - name: Create release
         if: startsWith(github.ref, 'refs/tags/v') && matrix.ghc != '8.10.7'
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           body: |
             See full changelog [here](https://github.com/simplex-chat/simplexmq/blob/master/CHANGELOG.md).
