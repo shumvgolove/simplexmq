@@ -5,7 +5,7 @@ FROM ubuntu:${TAG} AS build
 ### Build stage
 
 ARG GHC=9.6.3
-ARG CABAL=3.12.1.0
+ARG CABAL=3.14.1.1
 
 # Install curl, git and and simplexmq dependencies
 RUN apt-get update && apt-get install -y curl git sqlite3 libsqlite3-dev build-essential libgmp3-dev zlib1g-dev llvm llvm-dev libnuma-dev libssl-dev
