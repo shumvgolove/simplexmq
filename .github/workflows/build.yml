@@ -6,7 +6,9 @@ on:
 
 jobs:
   build:
-    name: "Ubuntu ${{ matrix.os }}: ${{ matrix.ghc }}"
+    name: "Ubuntu: ${{ matrix.os }}, GHC: ${{ matrix.ghc }}"
+    env:
+      apps: "smp-server xftp-server ntf-server xftp"
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
@@ -25,18 +27,25 @@ jobs:
       - name: Clone project
         uses: actions/checkout@v3
 
-      - name: Build and test
+      - name: Prepare image
         shell: bash
-        run: docker build --build-arg TAG=${{ matrix.os }} --build-arg GHC=${{ matrix.ghc }} --output . .
+        run: docker build --build-arg TAG=${{ matrix.os }} --build-arg GHC=${{ matrix.ghc }} -t local .
 
-      - name: Prepare binaries--output . .
+      - name: Start container
+        shell: bash
+        run: docker run -t -d --name builder local
+
+      - name: Build binaries
+        shell: bash
+        run: |
+          docker exec -e apps="$apps" -it builder sh -c 'cabal build --enable-tests && mkdir /out && for i in $apps; do bin=$(find /project/dist-newstyle -name "$i" -type f -executable); strip "$bin"; chmod +x "$bin"; mv "$bin" /out/; done'
+
+      - name: Copy binaries from container and prepare them
         if: startsWith(github.ref, 'refs/tags/v')
         shell: bash
         run: |
-          mv smp-server smp-server-ubuntu-${{ matrix.platform_name}}
-          mv ntf-server ntf-server-ubuntu-${{ matrix.platform_name}}
-          mv xftp-server xftp-server-ubuntu-${{ matrix.platform_name}}
-          mv xftp xftp-ubuntu-${{ matrix.platform_name}}
+          docker cp builder:/out .
+          for i in $apps; do mv ./out/$i ./$i-ubuntu-${{ matrix.platform_name }}; done
 
       - name: Build changelog
         if: startsWith(github.ref, 'refs/tags/v')
@@ -62,10 +71,14 @@ jobs:
           prerelease: true
           files: |
             LICENSE
-            smp-server-ubuntu-${{ matrix.platform_name}}
-            ntf-server-ubuntu-${{ matrix.platform_name}}
-            xftp-server-ubuntu-${{ matrix.platform_name}}
-            xftp-ubuntu-${{ matrix.platform_name}}
+            smp-server-ubuntu-${{ matrix.platform_name }}
+            ntf-server-ubuntu-${{ matrix.platform_name }}
+            xftp-server-ubuntu-${{ matrix.platform_name }}
+            xftp-ubuntu-${{ matrix.platform_name }}
           fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Test
+        shell: bash
+        run: docker exec -it builder cabal test --test-show-details=direct

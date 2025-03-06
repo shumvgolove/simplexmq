@@ -40,19 +40,3 @@ WORKDIR /project
 
 # Compile app
 RUN cabal update
-RUN cabal build --enable-tests
-
-# Test
-RUN cabal test --test-show-details=direct
-
-# Move binaries
-WORKDIR /out
-RUN for i in smp-server xftp-server ntf-server xftp; do \
-        bin=$(find /project/dist-newstyle -name "$i" -type f -executable); \
-        strip "$bin"; \
-        chmod +x "$bin"; \
-        mv "$bin" .; \
-    done
-
-FROM scratch
-COPY --from=build /out /
