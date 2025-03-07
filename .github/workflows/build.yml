@@ -1,8 +1,13 @@
 name: build
 
 on:
-  release:
-    types: [published]
+  push:
+    branches:
+      - master
+      - stable
+    tags:
+      - "v*"
+  pull_request:
 
 jobs:
   build:
@@ -16,6 +21,9 @@ jobs:
         include:
           - os: 22.04
             ghc: "8.10.7"
+            platform_name: 20_04-x86-64
+          - os: 20.04
+            ghc: "9.6.3"
             platform_name: 20_04-x86-64
           - os: 22.04
             ghc: "9.6.3"
