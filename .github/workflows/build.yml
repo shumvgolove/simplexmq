@@ -70,9 +70,31 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+# =============================
+#     Prepare Linux matrix
+# =============================
+
+# E.g. for exluding 8.10.7 on stable or releases
+# Unfortunately, that is the only way, see: https://github.com/actions/runner/issues/1985
+
+  linux_prep:
+    runs-on: ubuntu-latest
+    needs: variables
+    outputs:
+      jobs: ${{ steps.include-jobs.outputs.jobs }}
+    steps:
+      - id: include-jobs
+        run: |
+          includeJobs='
+            ${{ !(github.ref == 'refs/heads/stable' || startsWith(github.ref, 'refs/tags/v')) && '{"os": "22.04", "ghc": "8.10.7", "platform_name": "22_04-8.10.7"},' || '' }}
+            {"os": "22.04", "ghc": "${{ needs.variables.outputs.GHC_VER }}", "platform_name": "22_04-x86-64"},
+            {"os": "24.04", "ghc": "${{ needs.variables.outputs.GHC_VER }}", "platform_name": "24_04-x86-64"}
+          '
+          printf 'jobs=[%s]' "$includeJobs" | tr -d '[:space:]' >> $GITHUB_OUTPUT
+
   build:
     name: "ubuntu-${{ matrix.os }}, GHC: ${{ matrix.ghc }}"
-    needs: [maybe-release, variables]
+    needs: [maybe-release, linux_prep]
     env:
       apps: "smp-server xftp-server ntf-server xftp"
     runs-on: ubuntu-${{ matrix.os }}
@@ -92,30 +114,29 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: 22.04
-            ghc: "8.10.7"
-            platform_name: 22_04-8.10.7
-          - os: 22.04
-            ghc: ${{ needs.variables.outputs.GHC_VER }}
-            platform_name: 22_04-x86-64
-          - os: 24.04
-            ghc: ${{ needs.variables.outputs.GHC_VER }}
-            platform_name: 24_04-x86-64
+        include: ${{ fromJSON(needs.linux_prep.outputs.jobs) }}
     steps:
-      - name: Skip unreliable ghc 8.10.7 build on stable branch or in release
-        shell: bash
-        if: inputs.ghc_ver == '8.10.7' && (github.ref == 'refs/heads/stable' || startsWith(github.ref, 'refs/tags/v'))
-        run: exit 0
-
       - name: Clone project
         uses: actions/checkout@v3
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: simplex-chat/docker-setup-buildx-action@v3
+
+      - name: Install PostgreSQL 15 client tools
+        if: matrix.os == '22.04'
+        shell: bash
+        run: |
+          # Import the repository signing key
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          # Add the PostgreSQL APT repository
+          sudo sh -c 'echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          # Update repository and install postgresql tools
+          sudo apt update
+          sudo apt -y install postgresql-client-15
 
       - name: Build and cache Docker image
-        uses: docker/build-push-action@v6
+        uses: simplex-chat/docker-build-push-action@v6
         with:
           context: .
           load: true
@@ -148,7 +169,7 @@ jobs:
             build/${{ matrix.platform_name }}:latest
 
       - name: Build smp-server (postgresql) and tests
-        shell: docker exec -t builder sh {0}
+        shell: docker exec -t builder sh -eu {0}
         run: |
           cabal update
           cabal build --jobs=$(nproc) --enable-tests -fserver_postgres
@@ -180,7 +201,7 @@ jobs:
           printf 'hash=%s' "$hash" >> $GITHUB_OUTPUT
 
       - name: Build everything else (standard)
-        shell: docker exec -t builder sh {0}
+        shell: docker exec -t builder sh -eu {0}
         run: |
           cabal build --jobs=$(nproc)
           mkdir -p /out
@@ -212,13 +233,8 @@ jobs:
             hashes="${hashes}${NL}${hash}"
           done
 
-          printf 'bins<<EOF' >> "$GITHUB_OUTPUT"
-          printf '%s' "$bins" >> "$GITHUB_OUTPUT"
-          printf 'EOF' >> "$GITHUB_OUTPUT"
-
-          printf 'hashes<<EOF' >> "$GITHUB_OUTPUT"
-          printf '%s' "$hashes" >> "$GITHUB_OUTPUT"
-          printf 'EOF' >> "$GITHUB_OUTPUT"
+          printf "bins<<EOF\n%s\nEOF\n" "$bins" >> "$GITHUB_OUTPUT"
+          printf "hashes<<EOF\n%s\nEOF\n" "$hashes" >> "$GITHUB_OUTPUT"
 
       - name: Upload binaries
         if: startsWith(github.ref, 'refs/tags/v')
