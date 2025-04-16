@@ -103,6 +103,11 @@ jobs:
             ghc: ${{ needs.variables.outputs.GHC_VER }}
             platform_name: 24_04-x86-64
     steps:
+      - name: Skip unreliable ghc 8.10.7 build on stable branch or in release
+        shell: bash
+        if: inputs.ghc_ver == '8.10.7' && (github.ref == 'refs/heads/stable' || startsWith(github.ref, 'refs/tags/v'))
+        run: exit 0
+
       - name: Clone project
         uses: actions/checkout@v3
 
