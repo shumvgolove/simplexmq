@@ -332,13 +332,13 @@ newEnv config@ServerConfig {smpCredentials, httpCredentials, serverStoreCfg, smp
     ASSCfg qt mt (SSCMemory storePaths_) -> do
       let storePath = storeMsgsFile =<< storePaths_
       ms <- newMsgStore STMStoreConfig {storePath, quota = msgQueueQuota}
-      forM_ storePaths_ $ \StorePaths {storeLogFile = f} -> loadStoreLog (mkQueue ms) f $ queueStore ms
+      forM_ storePaths_ $ \StorePaths {storeLogFile = f} -> loadStoreLog (mkQueue ms True) f $ queueStore ms
       pure $ AMS qt mt ms
     ASSCfg qt mt SSCMemoryJournal {storeLogFile, storeMsgsPath} -> do
       let qsCfg = MQStoreCfg
           cfg = mkJournalStoreConfig qsCfg storeMsgsPath msgQueueQuota maxJournalMsgCount maxJournalStateLines idleQueueInterval
       ms <- newMsgStore cfg
-      loadStoreLog (mkQueue ms) storeLogFile $ stmQueueStore ms
+      loadStoreLog (mkQueue ms True) storeLogFile $ stmQueueStore ms
       pure $ AMS qt mt ms
 #if defined(dbServerPostgres)
     ASSCfg qt mt SSCDatabaseJournal {storeCfg, storeMsgsPath'} -> do
@@ -374,7 +374,8 @@ newEnv config@ServerConfig {smpCredentials, httpCredentials, serverStoreCfg, smp
       Just f -> do
         logInfo $ "compacting queues in file " <> T.pack f
         st <- newMsgStore STMStoreConfig {storePath = Nothing, quota = msgQueueQuota}
-        sl <- readWriteQueueStore False (mkQueue st) f (queueStore st)
+        -- we don't need to have locks in the map
+        sl <- readWriteQueueStore False (mkQueue st False) f (queueStore st)
         setStoreLog (queueStore st) sl
         closeMsgStore st
       Nothing -> do
@@ -383,8 +384,10 @@ newEnv config@ServerConfig {smpCredentials, httpCredentials, serverStoreCfg, smp
     getCredentials protocol creds = do
       files <- missingCreds
       unless (null files) $ do
-        putStrLn $ "Error: no " <> protocol <> " credentials: " <> intercalate ", " files
-        when (protocol == "HTTPS") $ putStrLn letsEncrypt
+        putStrLn $ "----------\nError: no " <> protocol <> " credentials: " <> intercalate ", " files
+        when (protocol == "HTTPS") $ do
+          putStrLn "Server should serve static pages to show connection links in the browser."
+          putStrLn letsEncrypt
         exitFailure
       loadServerCredential creds
       where
@@ -399,7 +402,7 @@ newEnv config@ServerConfig {smpCredentials, httpCredentials, serverStoreCfg, smp
         _ -> do
           putStrLn $ "Error: unsupported HTTPS credentials, required 4096-bit RSA\n" <> letsEncrypt
           exitFailure
-    letsEncrypt = "Use Let's Encrypt to generate: certbot certonly --standalone -d yourdomainname --key-type rsa --rsa-key-size 4096"
+    letsEncrypt = "Use Let's Encrypt to generate: certbot certonly --standalone -d yourdomainname --key-type rsa --rsa-key-size 4096\n----------"
     serverInfo =
       ServerInformation
         { information,

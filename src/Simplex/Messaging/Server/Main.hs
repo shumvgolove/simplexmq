@@ -118,7 +118,7 @@ smpServerCLI_ generateSite serveStaticFiles attachStaticFiles cfgPath logPath =
                 ("WARNING: message log file " <> storeMsgsFilePath <> " will be imported to journal directory " <> storeMsgsJournalDir)
                 "Messages not imported"
               ms <- newJournalMsgStore MQStoreCfg
-              readQueueStore True (mkQueue ms) storeLogFile $ stmQueueStore ms
+              readQueueStore True (mkQueue ms False) storeLogFile $ stmQueueStore ms
               msgStats <- importMessages True ms storeMsgsFilePath Nothing False -- no expiration
               putStrLn "Import completed"
               printMessageStats "Messages" msgStats
@@ -137,7 +137,7 @@ smpServerCLI_ generateSite serveStaticFiles attachStaticFiles cfgPath logPath =
                 "Journal not exported"
               ms <- newJournalMsgStore MQStoreCfg
               -- TODO [postgres] in case postgres configured, queues must be read from database
-              readQueueStore True (mkQueue ms) storeLogFile $ stmQueueStore ms
+              readQueueStore True (mkQueue ms False) storeLogFile $ stmQueueStore ms
               exportMessages True ms storeMsgsFilePath False
               putStrLn "Export completed"
               case readStoreType ini of
@@ -179,7 +179,7 @@ smpServerCLI_ generateSite serveStaticFiles attachStaticFiles cfgPath logPath =
                 ("WARNING: store log file " <> storeLogFile <> " will be compacted and imported to PostrgreSQL database: " <> B.unpack connstr <> ", schema: " <> B.unpack schema)
                 "Queue records not imported"
               ms <- newJournalMsgStore MQStoreCfg
-              sl <- readWriteQueueStore True (mkQueue ms) storeLogFile (queueStore ms)
+              sl <- readWriteQueueStore True (mkQueue ms False) storeLogFile (queueStore ms)
               closeStoreLog sl
               queues <- readTVarIO $ loadedQueues $ stmQueueStore ms
               let storeCfg = PostgresStoreCfg {dbOpts = dbOpts {createSchema = True}, dbStoreLogPath = Nothing, confirmMigrations = MCConsole, deletedTTL = iniDeletedTTL ini}
@@ -281,11 +281,11 @@ smpServerCLI_ generateSite serveStaticFiles attachStaticFiles cfgPath logPath =
           enableStoreLog <- onOffPrompt "Enable store log to restore queues and messages on server restart" True
           logStats <- onOffPrompt "Enable logging daily statistics" False
           putStrLn "Require a password to create new messaging queues?"
-          password <- withPrompt "'r' for random (default), 'n' - no password, or enter password: " serverPassword
+          password <- withPrompt "'r' for random (default), 'n' - no password (recommended for public servers), or enter password: " serverPassword
           let host = fromMaybe ip fqdn
           host' <- withPrompt ("Enter server FQDN or IP address for certificate (" <> host <> "): ") getLine
           sourceCode' <- withPrompt ("Enter server source code URI (" <> maybe simplexmqSource T.unpack src' <> "): ") getServerSourceCode
-          staticPath' <- withPrompt ("Enter path to store generated static site with server information (" <> fromMaybe defaultStaticPath sp' <> "): ") getLine
+          staticPath' <- withPrompt ("Enter path to store generated server pages to show connection links (" <> fromMaybe defaultStaticPath sp' <> "): ") getLine
           initialize
             opts
               { enableStoreLog,
@@ -659,11 +659,15 @@ cliCommandP cfgPath logPath iniFile =
     initP :: Parser InitOptions
     initP = do
       enableStoreLog <-
-        switch
-          ( long "store-log"
-              <> short 'l'
-              <> help "Enable store log for persistence"
+        flag' False
+          ( long "disable-store-log"
+              <> help "Disable store log for persistence (enabled by default)"
           )
+          <|> flag True True
+            ( long "store-log"
+                <> short 'l'
+                <> help "Enable store log for persistence (DEPRECATED, enabled by default)"
+            )
       dbOptions <- dbOptsP
       logStats <-
         switch
